@@ -53,9 +53,9 @@ class CustomLLMClient:
     """
     response_model = None  # To be defined by subclasses
 
-    def __init__(self, config, model, **kwargs):
+    def __init__(self, config, **kwargs):
         # Optional: add further configuration or logging here
-        self.model = model
+        model="gpt-4o",
         print(f"CustomLLMClient config: {config}")
 
     def create(self, params):
@@ -65,7 +65,7 @@ class CustomLLMClient:
             mode=instructor.Mode.JSON
         )
         response = client.chat.completions.create(
-            model=self.model,
+            model="gpt-4o",
             messages=params["messages"],
             response_model=self.response_model,
         )
@@ -152,8 +152,9 @@ CLARITY_SYSTEM_PROMPT = (
 )
 
 RELEVANCE_SYSTEM_PROMPT = (
-    "You are an experienced educator specializing in mathematics. Your task is to evaluate the relevance of a math question "
-    "to a specific knowledge component (KC) and a set of example problems. Evaluate whether the question aligns with the "
+    "You are an experienced educator specializing in mathematics. Your task is to evaluate the relevance of a math question \n"
+    "to a specific knowledge component (KC). The set of example problems are aligned with the target knowledge component \n"
+    "Evaluate whether the question aligns with the "
     "target knowledge component and covers the same topic as the provided examples.\n\n"
     "Instructions:\n"
     "1. Read the provided question, target knowledge component (KC), and example problems carefully.\n"
@@ -310,6 +311,8 @@ def evaluate_qa_relevance(question: str, kc_name: str, examples: List[str]):
     )
     event = completion.choices[0].message.parsed
     event_json = json.loads(event.model_dump_json())
+    print(event_json)
+
     return event_json
 
 def evaluate_qa_importance(question: str, kc_name: str):

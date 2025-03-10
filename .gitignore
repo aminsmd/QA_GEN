@@ -172,3 +172,5 @@ cython_debug/
 
 /data/
 /config.json
+/agents_temp
+/agents_new
