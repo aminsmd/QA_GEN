@@ -137,7 +137,7 @@ def generate_system_prompt(agent, autoCOT_flag, Solution_flag, difficulty_method
         else:
             question_section = ""
     else:
-        question_section = ""
+        question_section = "Questions: \n" + f"Questions: {all_questions}"
 
     # Normalize agent type to lowercase for consistency.
     agent_type = agent.lower()
@@ -157,16 +157,16 @@ def generate_system_prompt(agent, autoCOT_flag, Solution_flag, difficulty_method
         )
     elif agent_type == "baseline_teacher_zs":
         prompt = (
-            f"You are a middle school math teacher. Your task is to generate a math question in the following Knowledge Component: {kc}\n"
+            f"You are a middle school math teacher. Your task is coming up math questions for students in your class in the following Knowledge Component: {kc}\n"
             f"and at the following difficulty level: {difficulty}\n"
-            f"Return your {returned_information} without extra commentary.\n"
-            f"{solution_instructions_text}"
-            f"{autoCOT_instructions_text}\n"
-            "If participating in a group discussion, please review previous messages for context and ensure your response reflects collaborative input."
+            f"{solution_instructions_text}.\n"
+            f"{autoCOT_instructions_text}.\n"
+            f"Respond with {returned_information} without extra commentary.\n"
+
         )
     elif agent_type == "simple_teacher":
         prompt = (
-            f"You are a middle school math teacher. Your task is to generate a math question/exercise problem for a student in your course in the following Knowledge Component: {kc}\n"
+            f"You are a middle school math teacher. Your task is to generate a math question/exercise problem or revise the question you have come up with. The question/excercise is intended for a student in your course in the following Knowledge Component: {kc}\n"
             f"The question should align with the following difficulty level: {difficulty}\n"
             "Remember to ensure the question is at the correct difficulty for middle school level.\n"
             f"Return your {returned_information} without extra commentary.\n"
@@ -174,40 +174,40 @@ def generate_system_prompt(agent, autoCOT_flag, Solution_flag, difficulty_method
             f"{autoCOT_instructions_text}"
             "You can see a few examples of questions/problems in the same Knowledge Component:\n"
             f"{question_section}\n"
-            "If participating in a group discussion, please review previous messages for context and ensure your response reflects collaborative input."
+            "You are participating in a discussion with an assistant that provides you with feedback on your question.\n"
+            "At every stage of the discussion, you are provided with the entire history of your previous reposnses and all the feedbacks you have received from your assistant.\n"
+            "At every stage of the discussion, you are expected to include this feedback in your decision to either 1.revise your last question or 2.stick with your last response.\n"
+
         )
     elif agent_type == "bloom_teacher":
         prompt = (
-            "You are an experienced middle school educator specializing in mathematics education. "
-            f"Your task is to generate one {difficulty} math question on the following knowledge component: {kc}. "
-            "The question should align with the intended cognitive challenge level as defined by Bloom's Taxonomy. "
+            f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}\n"
+            f"You are a middle school math teacher. Your task is to generate a math question/exercise problem or revise the question you have come up with. The question/excercise is intended for a student in your course in the following Knowledge Component: {kc}\n"
+            "Your question should be somewhat similar to other questions in the same Knowledge Component. Here are a few example of questions in the same Knowledge Component: \n"
+            f"{question_section}\n"
+            f"The question should align with the following difficulty level: {difficulty}\n"
+            "The question should align with the intended cognitive challenge level as defined by Bloom's Taxonomy. \n"
             "Bloom's Taxonomy comprises six levels of learning objectives:\n"
-            "1. Remembering\n"
-            "2. Understanding\n"
-            "3. Applying\n"
-            "4. Analyzing\n"
-            "5. Evaluating\n"
-            "6. Creating\n\n"
-            "We define three difficulty levels for generated questions:\n"
-            "- Easy: (levels 1-2)\n"
-            "- Medium: (levels 3-4)\n"
-            "- Hard: (levels 5-6)\n\n"
-            "Steps:\n"
-            "1. Recall the target Bloom levels.\n"
-            "2. Generate one question that aligns with the knowledge component and the targeted Bloom levels.\n"
-            "3. Provide a step-by-step solution and the final answer.\n\n"
-            "Remember to ensure the question is at the correct difficulty for middle school level.\n"
-            f"Return your {returned_information} without extra commentary.\n"
+            "levels of learning objectives:\n\n"
+            "1. Remembering: Recalling facts or basic concepts.\n"
+            "2. Understanding: Comprehending the meaning of information and explaining it in your own words.\n"
+            "3. Applying: Using information to solve problems in new situations.\n"
+            "4. Analyzing: Breaking down information into parts and understanding its structure or relationships.\n"
+            "5. Evaluating: Making judgments about the value or quality of information.\n"
+            "6. Creating: Synthesizing information to produce new ideas or products.\n\n"
+            "In our system, we define three difficulty levels for generated questions:\n"
+            " - Easy: (levels 1-2) Questions should primarily test the first two Bloom levels (Remembering and Understanding).\n"
+            " - Medium: (levels 3-4) Questions should primarily test the middle two Bloom levels (Applying and Analyzing).\n"
+            " - Hard: (levels 5-6)Questions should primarily test the top two Bloom levels (Evaluating and Creating).\n\n"
+
+            f"Respond with {returned_information} without extra commentary.\n"
             f"{solution_instructions_text}"
             f"{autoCOT_instructions_text}"
-            "You can see a few examples below of past questions with various difficulty levels:\n"
-            f"{question_section}\n"
-            "If participating in a group discussion, please review previous messages for context and ensure your response reflects collaborative input."
         )
     elif agent_type == "generic_critic":
         prompt = (
             "You are an assistant to a middle school teacher. "
-            "Your task is to provide constructive and detailed critical feedback on a math question provided by the teacher.\n"
+            "Your task is to provide constructive and detailed critical feedback on a math question and the answer provided by the teacher.\n"
             "When participating in group discussions, please consider the overall conversation context and previous feedback."
         )
     elif agent_type == "super_critic":
@@ -234,22 +234,31 @@ def generate_system_prompt(agent, autoCOT_flag, Solution_flag, difficulty_method
         )
     elif agent_type == "ceo":
         prompt = (
-            "You are the CEO and the final decision-maker in the process of designing middle school math questions. "
-            "You are provided with a set of questions along with example questions below:\n"
+            "You are the CEO and the final decision-maker in the process of designing middle school math questions.\n"
+            "Your task is to choose the best question and answer pair from the questions in the conversation history of a number of other agents provided to you as a message chain (chat history).\n"
+            "If the agents have reached a consensus by the end of their conversation, only respond with the agreed upon quesiton and answer.\n"
+            "If the agents haven't reached a consensus by the end of their conversation, you choose the best question in the chat based on the following criteria:\n"
+            "1The question should be similar to these exmaples :\n"
             f"{question_section}\n"
-            f"Your task is to select the best question based on the required difficulty level ({difficulty}) "
-            f"and the relevant Knowledge Component ({kc}).\n"
-            "When in a group setting, ensure that your decision reflects the collaborative input from your team."
+            f"The question has to be at the required difficulty level : ({difficulty}) "
+            f"and the relevant Knowledge Component : ({kc}).\n"
+            "Your response should include a question, and its answer and the question should always be from the chat history whether consensus is reached or not and you should not design questions\n"
+
         )
     elif agent_type == "versatile_agent":
         prompt = (
-            "You are a versatile agent participating in group discussions. "
-            "Review the questions provided so far, offer constructive feedback, and propose revisions. "
-            "If no questions are available, generate a new question based on the required difficulty level "
-            f"({difficulty}), the relevant Knowledge Component ({kc}), and the provided examples below:\n"
-            f"{question_section}\n"
+            "You are an experienced middle school educator specializing in mathematics education. \n"
+            "You are participating in group discussions with other teacher agents like yourself\n"
+            "You are your colleagues are tasked with designing middle school math questions and answers, revising questions if necessary, and providing feedback to each other on your decisions in the chat when it's your turn.\n"
+            "When it's your turn, you are given a message chain (chat history) of the discussion between you and your colleagues.\n"
             "Your main group objective is to reach consensus so your individual goal is to help your team reach a consensus.\n"
-            "Remember to review previous messages in the group chat to ensure your feedback aligns with the ongoing discussion."
+            f"If chat is empty and there are no questions, generate a new question in the relevant Knowledge Component ({kc}) at the {difficulty} difficulty level and similar to these examples :  "
+            f"{question_section}\n"
+            "If chat is not empty, look at the previous messages and the questions already in the chat and either 1.respond with the best question that you see so far or 2.revise it as you see fit to match the provided examples, difficulty level, and relevant Knowledge Component"
+            "Whatever you decide to do, provide feedback on your decision and the discusssions so far.\n"
+            "Remember to consider the ongoing discussion and include feedback that aligns with the group's consensus.\n"
+            "At every stage of the chat, your response should include a question(either question from the chat, or a revised question, or a quesiton you came up with), the answer. and the feedback to your colleagues .\n"
+            "Remember your main group objective is to reach consensus so your individual goal is to help your team reach and converge to a consensus.\n"
         )
     else:
         prompt = ""
@@ -279,7 +288,7 @@ class CustomLLMClient:
             mode=instructor.Mode.JSON
         )
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=params["messages"],
             response_model=self.response_model,
         )
@@ -392,14 +401,11 @@ def get_agent(agent, seed, temp, autoCOT_flag, Solution_flag, difficulty_method,
             "config_list": config_list,
             "seed": seed,
             "temperature": temp,
-            "cache": None,
             "cache_seed": None,
             "model": model
         },
         system_message=system_prompt
     )
-    print(model_client_cls)
-    print(config_list)
+    print(f"System Prompt: {system_prompt}")
     agent_instance.register_model_client(model_client_cls=model_client_cls)
-    print('after ')
     return agent_instance

@@ -31,7 +31,7 @@ def run_SOM1_WF1(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a three-way chat workflow involving a teacher, a super critic, and a reviser.
@@ -209,7 +209,7 @@ def run_single_baseline(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Instantiates a single baseline agent, generates a reply, and evaluates the output.
@@ -233,31 +233,6 @@ def run_single_baseline(
       pd.DataFrame: DataFrame containing the evaluated question, answer, and metrics.
     """
     # 1) Load question samples.
-    samples = load_question_samples(easy_csv, medium_csv, hard_csv)
-    all_questions = samples["all_questions"]
-    easy_questions = samples["easy_questions"]
-    medium_questions = samples["medium_questions"]
-    hard_questions = samples["hard_questions"]
-
-    # 2) Create the baseline agent.
-    baseline_agent = get_agent(
-        agent="baseline_teacher",
-        seed=seed,
-        temp=temp,
-        autoCOT_flag=autoCOT,
-        Solution_flag=Solution_flag,
-        difficulty_method=difficulty_method,
-        difficulty=difficulty,
-        kc=kc,
-        all_questions=all_questions,
-        easy_questions=easy_questions,
-        medium_questions=medium_questions,
-        hard_questions=hard_questions,
-        model=model
-    )
-
-    # Get the appropriate extracted info model for the baseline agent.
-    teacher_model_cls = get_extracted_info_model("baseline_teacher", autoCOT, Solution_flag)
 
     # 3) Define the initial message and generate a reply.
     initial_message = {
@@ -265,42 +240,73 @@ def run_single_baseline(
         "name": "Initializer",
         "role": "user"
     }
-    messages_chain = [initial_message]
-    
-    # Generate the agent's reply.
-    baseline_reply = baseline_agent.generate_reply(messages=messages_chain)
-    teacher_msg = {
-        "content": baseline_reply,
-        "name": "baseline_teacher",
-        "role": "assistant"
-    }
-    messages_chain.append(teacher_msg)
-    print(teacher_msg)
+    qa_list = []
 
-    # 4) Extract and evaluate the final output.
-    final_extracted_info = teacher_model_cls.model_validate_json(baseline_reply)
-    total_tokens = calculate_total_tokens(messages_chain, model=model)
-    eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
-    
-    # Prepare the output row.
-    row_dict = {
-        "difficulty": difficulty,
-        "kc": kc,
-        "question": final_extracted_info.question,
-        "answer": final_extracted_info.answer,
-        **eval_metrics,
-        "method": "single_baseline",
-        "iteration_tokens": total_tokens,
-        "autoCOT": autoCOT,
-        "Solution_flag": Solution_flag,
-        "difficulty_method": difficulty_method,
-    }
+    for i in range(n_questions):
+        samples = load_question_samples(easy_csv, medium_csv, hard_csv)
+        all_questions = samples["all_questions"]
+        easy_questions = samples["easy_questions"]
+        medium_questions = samples["medium_questions"]
+        hard_questions = samples["hard_questions"]
 
-    # 5) Save and return the result.
-    df_result = pd.DataFrame([row_dict])
-    df_result.to_csv(output_csv_path, index=False)
+        # 2) Create the baseline agent.
+        baseline_agent = get_agent(
+            agent="baseline_teacher",
+            seed=seed,
+            temp=temp,
+            autoCOT_flag=autoCOT,
+            Solution_flag=Solution_flag,
+            difficulty_method=difficulty_method,
+            difficulty=difficulty,
+            kc=kc,
+            all_questions=all_questions,
+            easy_questions=easy_questions,
+            medium_questions=medium_questions,
+            hard_questions=hard_questions,
+            model=model
+        )
+
+        # Get the appropriate extracted info model for the baseline agent.
+        teacher_model_cls = get_extracted_info_model("baseline_teacher", autoCOT, Solution_flag)
+
+
+        messages_chain = [initial_message]
+        
+        # Generate the agent's reply.
+        baseline_reply = baseline_agent.generate_reply(messages=messages_chain)
+        teacher_msg = {
+            "content": baseline_reply,
+            "name": "baseline_teacher",
+            "role": "assistant"
+        }
+        messages_chain.append(teacher_msg)
+        print(teacher_msg)
+
+        # 4) Extract and evaluate the final output.
+        final_extracted_info = teacher_model_cls.model_validate_json(baseline_reply)
+        total_tokens = calculate_total_tokens(messages_chain, model=model)
+        eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
+        
+        # Prepare the output row.
+        row_dict = {
+            "difficulty": difficulty,
+            "kc": kc,
+            "question": final_extracted_info.question,
+            "answer": final_extracted_info.answer,
+            **eval_metrics,
+            "method": "single_baseline",
+            "iteration_tokens": total_tokens,
+            "autoCOT": autoCOT,
+            "Solution_flag": Solution_flag,
+            "difficulty_method": difficulty_method,
+        }
+        qa_list.append(row_dict)
+
+    # 5) Save and return results.
+    df_results = pd.DataFrame(qa_list)
+    df_results.to_csv(output_csv_path, index=False)
     print(f"Saved results to {output_csv_path}")
-    return df_result
+    return df_results
 
 
 def run_single_baseline_zs(
@@ -316,7 +322,7 @@ def run_single_baseline_zs(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Instantiates a zero-shot baseline teacher agent, generates a reply, and evaluates the output.
@@ -339,75 +345,85 @@ def run_single_baseline_zs(
     Returns:
       pd.DataFrame: DataFrame containing the evaluated question, answer, and metrics.
     """
-    # 1) Load question samples.
-    samples = load_question_samples(easy_csv, medium_csv, hard_csv)
-    all_questions = samples["all_questions"]
-    easy_questions = samples["easy_questions"]
-    medium_questions = samples["medium_questions"]
-    hard_questions = samples["hard_questions"]
-
-    # 2) Create the zero-shot baseline agent.
-    baseline_zs_agent = get_agent(
-        agent="baseline_teacher_zs",
-        seed=seed,
-        temp=temp,
-        autoCOT_flag=autoCOT,
-        Solution_flag=Solution_flag,
-        difficulty_method=difficulty_method,
-        difficulty=difficulty,
-        kc=kc,
-        all_questions=all_questions,
-        easy_questions=easy_questions,
-        medium_questions=medium_questions,
-        hard_questions=hard_questions,
-        model=model
-    )
-
-    # Get the appropriate extracted info model for the zero-shot baseline agent.
-    teacher_model_cls = get_extracted_info_model("baseline_teacher_zs", autoCOT, Solution_flag)
 
     # 3) Define the initial message and generate a reply.
     initial_message = {
-        "content": "Write one math question for middle school students to solve.",
+        "content": "Generate one math question",
         "name": "Initializer",
         "role": "user"
     }
     messages_chain = [initial_message]
-    
-    # Generate the agent's reply.
-    baseline_zs_reply = baseline_zs_agent.generate_reply(messages=messages_chain)
-    teacher_msg = {
-        "content": baseline_zs_reply,
-        "name": "baseline_teacher_zs",
-        "role": "assistant"
-    }
-    messages_chain.append(teacher_msg)
-    print(teacher_msg)
+    qa_list = []
 
-    # 4) Extract and evaluate the final output.
-    final_extracted_info = teacher_model_cls.model_validate_json(baseline_zs_reply)
-    total_tokens = calculate_total_tokens(messages_chain, model=model)
-    eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
-    
-    # Prepare the output row.
-    row_dict = {
-        "difficulty": difficulty,
-        "kc": kc,
-        "question": final_extracted_info.question,
-        "answer": final_extracted_info.answer,
-        **eval_metrics,
-        "method": "single_baseline_zs",
-        "iteration_tokens": total_tokens,
-        "autoCOT": autoCOT,
-        "Solution_flag": Solution_flag,
-        "difficulty_method": difficulty_method,
-    }
+    for i in range(n_questions):
+        # 1) Load question samples.
+        samples = load_question_samples(easy_csv, medium_csv, hard_csv)
+        all_questions = samples["all_questions"]
+        easy_questions = samples["easy_questions"]
+        medium_questions = samples["medium_questions"]
+        hard_questions = samples["hard_questions"]
+        import random
+        random_seed = random.randint(1, 10000)
+        random_temp = random.choice([0.5, 0.7, 0.9, 1.3, 1.5, 1.7])  # Randomly choose between 0.3, 0.7, and 0.9.
 
-    # 5) Save and return the result.
-    df_result = pd.DataFrame([row_dict])
-    df_result.to_csv(output_csv_path, index=False)
+        print(f"Random seed: {random_seed}")
+        print(f"Random temperature: {random_temp}")
+
+        # 2) Create the zero-shot baseline agent.
+        baseline_zs_agent = get_agent(
+            agent="baseline_teacher_zs",
+            seed=random_seed,
+            temp=random_temp,
+            autoCOT_flag=autoCOT,
+            Solution_flag=Solution_flag,
+            difficulty_method=difficulty_method,
+            difficulty=difficulty,
+            kc=kc,
+            all_questions=all_questions,
+            easy_questions=easy_questions,
+            medium_questions=medium_questions,
+            hard_questions=hard_questions,
+            model=model
+        )
+
+        # Get the appropriate extracted info model for the zero-shot baseline agent.
+        teacher_model_cls = get_extracted_info_model("baseline_teacher_zs", autoCOT, Solution_flag)
+
+        # Generate the agent's reply.
+        baseline_zs_reply = baseline_zs_agent.generate_reply(messages=messages_chain)
+        teacher_msg = {
+            "content": baseline_zs_reply,
+            "name": "baseline_teacher_zs",
+            "role": "assistant"
+        }
+        messages_chain.append(teacher_msg)
+
+        # 4) Extract and evaluate the final output.
+        final_extracted_info = teacher_model_cls.model_validate_json(baseline_zs_reply)
+        total_tokens = calculate_total_tokens(messages_chain, model=model)
+        eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
+        
+        # Prepare the output row.
+        row_dict = {
+            "difficulty": difficulty,
+            "kc": kc,
+            "question": final_extracted_info.question,
+            "answer": final_extracted_info.answer,
+            **eval_metrics,
+            "method": "single_baseline_zs",
+            "iteration_tokens": total_tokens,
+            "autoCOT": autoCOT,
+            "Solution_flag": Solution_flag,
+            "difficulty_method": difficulty_method,
+        }
+        qa_list.append(row_dict)
+
+    # 5) Save and return results.
+    df_results = pd.DataFrame(qa_list)
+    df_results.to_csv(output_csv_path, index=False)
     print(f"Saved results to {output_csv_path}")
-    return df_result
+    return df_results
+
 
 
 def run_single_bloom_teacher(
@@ -423,7 +439,7 @@ def run_single_bloom_teacher(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Instantiates a Bloom teacher agent, generates a reply, and evaluates the output.
@@ -446,75 +462,87 @@ def run_single_bloom_teacher(
     Returns:
       pd.DataFrame: DataFrame containing the evaluated question, answer, and metrics.
     """
-    # 1) Load question samples.
-    samples = load_question_samples(easy_csv, medium_csv, hard_csv)
-    all_questions = samples["all_questions"]
-    easy_questions = samples["easy_questions"]
-    medium_questions = samples["medium_questions"]
-    hard_questions = samples["hard_questions"]
-
-    # 2) Create the Bloom teacher agent.
-    bloom_teacher_agent = get_agent(
-        agent="bloom_teacher",
-        seed=seed,
-        temp=temp,
-        autoCOT_flag=autoCOT,
-        Solution_flag=Solution_flag,
-        difficulty_method=difficulty_method,
-        difficulty=difficulty,
-        kc=kc,
-        all_questions=all_questions,
-        easy_questions=easy_questions,
-        medium_questions=medium_questions,
-        hard_questions=hard_questions,
-        model=model
-    )
-
-    # Get the appropriate extracted info model for the Bloom teacher agent.
-    teacher_model_cls = get_extracted_info_model("bloom_teacher", autoCOT, Solution_flag)
-
     # 3) Define the initial message and generate a reply.
     initial_message = {
-        "content": "Write one math question for middle school students to solve.",
+        "content": "Generate one math question",
         "name": "Initializer",
         "role": "user"
-    }
+    }    
     messages_chain = [initial_message]
-    
-    # Generate the agent's reply.
-    bloom_reply = bloom_teacher_agent.generate_reply(messages=messages_chain)
-    teacher_msg = {
-        "content": bloom_reply,
-        "name": "bloom_teacher",
-        "role": "assistant"
-    }
-    messages_chain.append(teacher_msg)
-    print(teacher_msg)
+    qa_list = []
 
-    # 4) Extract and evaluate the final output.
-    final_extracted_info = teacher_model_cls.model_validate_json(bloom_reply)
-    total_tokens = calculate_total_tokens(messages_chain, model=model)
-    eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
-    
-    # Prepare the output row.
-    row_dict = {
-        "difficulty": difficulty,
-        "kc": kc,
-        "question": final_extracted_info.question,
-        "answer": final_extracted_info.answer,
-        **eval_metrics,
-        "method": "single_bloom_teacher",
-        "iteration_tokens": total_tokens,
-        "autoCOT": autoCOT,
-        "Solution_flag": Solution_flag,
-        "difficulty_method": difficulty_method,
-    }
+    for i in range(n_questions):
 
-    # 5) Save and return the result.
-    df_result = pd.DataFrame([row_dict])
-    df_result.to_csv(output_csv_path, index=False)
+        # 1) Load question samples.
+        samples = load_question_samples(easy_csv, medium_csv, hard_csv)
+        all_questions = samples["all_questions"]
+        easy_questions = samples["easy_questions"]
+        medium_questions = samples["medium_questions"]
+        hard_questions = samples["hard_questions"]
+        random_seed = random.randint(1, 1000000)
+        random_temp = random.choice([0.5, 0.7, 0.9, 1.3, 1.5, 1.7])  # Randomly choose between 0.3, 0.7, and 0.9.
+        # random_temp = 2
+
+        print(f"Random seed: {random_seed}")
+        print(f"Random temperature: {random_temp}")
+        # 2) Create the Bloom teacher agent.
+        bloom_teacher_agent = get_agent(
+            agent="bloom_teacher",
+            seed=random_seed,
+            temp=random_temp,
+            autoCOT_flag=autoCOT,
+            Solution_flag=Solution_flag,
+            difficulty_method=difficulty_method,
+            difficulty=difficulty,
+            kc=kc,
+            all_questions=all_questions,
+            easy_questions=easy_questions,
+            medium_questions=medium_questions,
+            hard_questions=hard_questions,
+            model=model
+        )
+
+        # Get the appropriate extracted info model for the Bloom teacher agent.
+        teacher_model_cls = get_extracted_info_model("bloom_teacher", autoCOT, Solution_flag)
+
+
+        # Generate the agent's reply.
+        bloom_reply = bloom_teacher_agent.generate_reply(messages=messages_chain)
+        teacher_msg = {
+            "content": bloom_reply,
+            "name": "bloom_teacher",
+            "role": "assistant"
+        }
+        messages_chain.append(teacher_msg)
+        print(teacher_msg)
+
+        # 4) Extract and evaluate the final output.
+        final_extracted_info = teacher_model_cls.model_validate_json(bloom_reply)
+        total_tokens = calculate_total_tokens(messages_chain, model=model)
+        eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
+        
+        # Prepare the output row.
+        row_dict = {
+            "difficulty": difficulty,
+            "kc": kc,
+            "question": final_extracted_info.question,
+            "answer": final_extracted_info.answer,
+            **eval_metrics,
+            "method": "single_bloom_teacher",
+            "iteration_tokens": total_tokens,
+            "autoCOT": autoCOT,
+            "Solution_flag": Solution_flag,
+            "difficulty_method": difficulty_method,
+        }
+
+        qa_list.append(row_dict)
+
+    # 5) Save and return results.
+    df_results = pd.DataFrame(qa_list)
+    df_results.to_csv(output_csv_path, index=False)
     print(f"Saved results to {output_csv_path}")
-    return df_result
+    return df_results
+
 
 
 
@@ -532,8 +560,9 @@ def run_SOM1(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
+    
     """
     Runs a SOM1 workflow where a simple teacher and a super critic exchange messages back and forth.
     
@@ -692,7 +721,7 @@ def run_SOM2(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a SOM2 workflow where a simple teacher and a generic critic exchange messages back and forth.
@@ -852,7 +881,7 @@ def run_SOM3(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a SOM3 workflow where three agents—a simple teacher, a reviser, and a generic critic—
@@ -1040,7 +1069,7 @@ def run_SOM4(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a SOM4 workflow where four agents—baseline_teacher, student, generic_critic, and reviser—
@@ -1253,7 +1282,7 @@ def run_SOM5(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a SOM5 workflow where five agents—
@@ -1491,7 +1520,7 @@ def run_WF2_parallel(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a WF2_parallel workflow where a baseline teacher generates an initial reply,
@@ -1658,7 +1687,7 @@ def run_WF3_sequential(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a WF3_sequential workflow where a baseline teacher generates an initial answer,
@@ -1785,7 +1814,6 @@ def run_WF3_sequential(
         final_extracted_info = teacher_model_cls.model_validate_json(final_teacher_reply)
         total_tokens = calculate_total_tokens(messages_chain, model=model)
         eval_metrics = evaluate_final_qa(final_extracted_info, kc, all_questions, difficulty)
-        
         # Prepare the output row.
         row_dict = {
             "difficulty": difficulty,
@@ -1823,7 +1851,7 @@ def run_WF4(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a WF4 workflow consisting of multiple distinct questions, each processed through multiple independent group chats.
@@ -2054,7 +2082,7 @@ def run_WF5(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a WF5 workflow consisting of multiple distinct questions, each processed through multiple independent group chats (n_chats).
@@ -2259,7 +2287,7 @@ def run_WF6(
     seed: int = 42,
     temp: float = 0.7,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a WF6 workflow consisting of multiple distinct questions, each processed through multiple independent group chats (n_chats).
@@ -2518,7 +2546,7 @@ def run_society_of_minds(
     output_csv_path: str = "./data/society_of_minds_output.csv",
     seed: int = 42,
     Solution_flag: bool = False,
-    model: str = "gpt-4o"
+    model: str = "gpt-4o-mini"
 ):
     """
     Runs a Society of Minds workflow where:
@@ -2547,41 +2575,25 @@ def run_society_of_minds(
       pd.DataFrame: DataFrame containing the CEO's final output and evaluation metrics for each question.
     """
     # Set seed for reproducibility.
-    random.seed(seed)
+    # random.seed(seed)
     
-    # 1) Load question samples.
-    samples = load_question_samples(easy_csv, medium_csv, hard_csv)
-    all_questions = samples["all_questions"]
-    easy_questions = samples["easy_questions"]
-    medium_questions = samples["medium_questions"]
-    hard_questions = samples["hard_questions"]
+    results = []  # To store outputs for each question.
 
-    # 2) Create the simple_teacher agent.
-    teacher_agent = get_agent(
-        agent="simple_teacher",
-        seed=seed,
-        temp=0.7,  # Fixed temperature for the teacher.
-        autoCOT_flag=autoCOT,
-        Solution_flag=Solution_flag,
-        difficulty_method=difficulty_method,
-        difficulty=difficulty,
-        kc=kc,
-        all_questions=all_questions,
-        easy_questions=easy_questions,
-        medium_questions=medium_questions,
-        hard_questions=hard_questions,
-        model=model
-    )
 
-    # 3) Create n_agents versatile agents with random seeds and random temperatures.
-    versatile_agents = []
-    for i in range(n_agents):
-        random_seed = random.randint(1, 1000000)
-        random_temp = random.uniform(0.01, 0.99)  # Random temperature between 0.7 and 1.0.
-        agent = get_agent(
-            agent="versatile_agent",
-            seed=random_seed,
-            temp=random_temp,
+    # 5) Process each question.
+    for q_idx in range(n_questions):
+           # 1) Load question samples.
+        samples = load_question_samples(easy_csv, medium_csv, hard_csv)
+        all_questions = samples["all_questions"]
+        easy_questions = samples["easy_questions"]
+        medium_questions = samples["medium_questions"]
+        hard_questions = samples["hard_questions"]
+
+        # 2) Create the simple_teacher agent.
+        teacher_agent = get_agent(
+            agent="simple_teacher",
+            seed=seed,
+            temp=0.7,  # Fixed temperature for the teacher.
             autoCOT_flag=autoCOT,
             Solution_flag=Solution_flag,
             difficulty_method=difficulty_method,
@@ -2593,49 +2605,56 @@ def run_society_of_minds(
             hard_questions=hard_questions,
             model=model
         )
-        versatile_agents.append(agent)
 
-    # 4) Create the CEO agent.
-    ceo_agent = get_agent(
-        agent="ceo",
-        seed=seed,
-        temp=0.7,
-        autoCOT_flag=autoCOT,
-        Solution_flag=Solution_flag,
-        difficulty_method=difficulty_method,
-        difficulty=difficulty,
-        kc=kc,
-        all_questions=all_questions,
-        easy_questions=easy_questions,
-        medium_questions=medium_questions,
-        hard_questions=hard_questions,
-        model=model
-    )
-    
-    # Get the extracted info model for the CEO output.
-    ceo_model_cls = get_extracted_info_model("ceo", autoCOT, Solution_flag)
+        # 3) Create n_agents versatile agents with random seeds and random temperatures.
+        versatile_agents = []
+        for i in range(n_agents):
+            random_seed = random.randint(1, 1000000)
+            random_temp = random.choice([0.5, 0.7, 0.9, 1.3, 1.5, 1.7])  # Randomly choose between 0.3, 0.7, and 0.9.
+            agent = get_agent(
+                agent="versatile_agent",
+                seed=random_seed,
+                temp=random_temp,
+                autoCOT_flag=autoCOT,
+                Solution_flag=Solution_flag,
+                difficulty_method=difficulty_method,
+                difficulty=difficulty,
+                kc=kc,
+                all_questions=all_questions,
+                easy_questions=easy_questions,
+                medium_questions=medium_questions,
+                hard_questions=hard_questions,
+                model=model
+            )
+            print(f"Versatile Agent {i+1} - Seed: {random_seed}, Temperature: {random_temp}")
+            versatile_agents.append(agent)
 
-    results = []  # To store outputs for each question.
-    initial_message = {
-        "content": "Write one math question for middle school students to solve.",
-        "name": "Initializer",
-        "role": "user"
-    }
+        # 4) Create the CEO agent.
+        ceo_agent = get_agent(
+            agent="ceo",
+            seed=seed,
+            temp=0.7,
+            autoCOT_flag=autoCOT,
+            Solution_flag=Solution_flag,
+            difficulty_method=difficulty_method,
+            difficulty=difficulty,
+            kc=kc,
+            all_questions=all_questions,
+            easy_questions=easy_questions,
+            medium_questions=medium_questions,
+            hard_questions=hard_questions,
+            model=model
+        )
+        
+        # Get the extracted info model for the CEO output.
+        ceo_model_cls = get_extracted_info_model("ceo", autoCOT, Solution_flag)
 
-    # 5) Process each question.
-    for q_idx in range(n_questions):
-        message_chain = [initial_message]
-
-        # The simple_teacher starts the conversation.
-        teacher_reply = teacher_agent.generate_reply(messages=message_chain)
-        teacher_msg = {
-            "content": teacher_reply,
-            "name": "simple_teacher",
-            "role": "assistant"
+        initial_message = {
+            "content": "Begin discussion.",
+            "name": "Initializer",
+            "role": "user"
         }
-        message_chain.append(teacher_msg)
-        print(f"Question {q_idx+1} - Teacher:", teacher_msg)
-
+        message_chain = [initial_message]
         # For the specified number of rounds, each versatile agent takes a turn.
         for round_idx in range(num_rounds):
             for idx, agent in enumerate(versatile_agents):

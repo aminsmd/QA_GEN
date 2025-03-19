@@ -55,7 +55,7 @@ class CustomLLMClient:
 
     def __init__(self, config, **kwargs):
         # Optional: add further configuration or logging here
-        model="gpt-4o",
+        model="gpt-4o-mini",
         print(f"CustomLLMClient config: {config}")
 
     def create(self, params):
@@ -65,7 +65,7 @@ class CustomLLMClient:
             mode=instructor.Mode.JSON
         )
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=params["messages"],
             response_model=self.response_model,
         )
@@ -117,7 +117,7 @@ config_list = [
 # -------------------------------------------------------------------
 # Helper: Token counting
 # -------------------------------------------------------------------
-def calculate_total_tokens(messages, model="gpt-4o"):
+def calculate_total_tokens(messages, model="gpt-4o-mini"):
     """
     Use autogen's count_token to measure usage across messages.
     """
@@ -276,7 +276,7 @@ def evaluate_qa_clarity(question: str):
         clarity: int
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CLARITY_SYSTEM_PROMPT},
             {"role": "user", "content": f"The Question: {question}\n"}
@@ -302,7 +302,7 @@ def evaluate_qa_relevance(question: str, kc_name: str, examples: List[str]):
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": RELEVANCE_SYSTEM_PROMPT},
             {"role": "user", "content": user_content}
@@ -311,7 +311,7 @@ def evaluate_qa_relevance(question: str, kc_name: str, examples: List[str]):
     )
     event = completion.choices[0].message.parsed
     event_json = json.loads(event.model_dump_json())
-    print(event_json)
+    # print(event_json)
 
     return event_json
 
@@ -329,7 +329,7 @@ def evaluate_qa_importance(question: str, kc_name: str):
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": IMPORTANCE_SYSTEM_PROMPT},
             {"role": "user", "content": user_content}
@@ -354,9 +354,10 @@ def evaluate_qa_difficulty_matching(question: str, kc_name: str, examples: List[
         f"Examples: {examples}\n"
         f"Specified Difficulty Level: {difficulty}\n"
     )
+    # print(user_content)
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": DIFFICULTY_MATCHING_SYSTEM_PROMPT},
             {"role": "user", "content": user_content}
@@ -382,7 +383,7 @@ def evaluate_qa_answerability(question: str, answer: str, difficulty: str):
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": ANSWERABILITY_SYSTEM_PROMPT},
             {"role": "user", "content": user_content}
@@ -408,7 +409,7 @@ def evaluate_qa_bloom(question: str, kc_name: str, difficulty: str):
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": BLOOM_EVALUATION_SYSTEM_PROMPT},
             {"role": "user", "content": user_content}
@@ -458,6 +459,7 @@ def evaluate_final_qa(extracted_info, kc: str, all_questions: list, difficulty: 
 
 
 def load_question_samples(easy_csv: str, medium_csv: str, hard_csv: str) -> dict:
+    n =5
     """
     Load question samples from easy, medium, and hard CSV files.
 
@@ -485,13 +487,18 @@ def load_question_samples(easy_csv: str, medium_csv: str, hard_csv: str) -> dict
     df_hard = pd.read_csv(hard_csv)
 
     # Sample 10 questions from each (using a fixed random_state for reproducibility)
-    easy_questions = df_easy["problem_body_clean"].sample(n=10, random_state=42).tolist()
-    medium_questions = df_medium["problem_body_clean"].sample(n=10, random_state=42).tolist()
-    hard_questions = df_hard["problem_body_clean"].sample(n=10, random_state=42).tolist()
+    # easy_questions = df_easy["problem_body_clean"].sample(n=10, random_state=42).tolist()
+    # medium_questions = df_medium["problem_body_clean"].sample(n=10, random_state=42).tolist()
+    # hard_questions = df_hard["problem_body_clean"].sample(n=10, random_state=42).tolist()
+
+    easy_questions = df_easy["problem_body_clean"].sample(n).tolist()
+    medium_questions = df_medium["problem_body_clean"].sample(n).tolist()
+    hard_questions = df_hard["problem_body_clean"].sample(n).tolist()
 
     # Combine all datasets and sample 10 questions from the union
     df_all = pd.concat([df_easy, df_medium, df_hard], ignore_index=True)
-    all_questions = df_all["problem_body_clean"].sample(n=10, random_state=42).tolist()
+    all_questions = df_all["problem_body_clean"].sample(n).tolist()
+    # all_questions = df_all["problem_body_clean"].sample(n=10, random_state=42).tolist()
 
     return {
         "easy_questions": easy_questions,
